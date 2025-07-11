@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MyKidsBank</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; }
+    .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+    h2 { text-align: center; }
+    input, select, button { width: 100%; padding: 10px; margin-top: 10px; }
+    .dashboard { display: none; }
+    .transactions { background: #eee; padding: 10px; height: 150px; overflow-y: auto; margin-top: 10px; }
+    .admin-panel { margin-top: 20px; background: #ffe5e5; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="container" id="authContainer">
+  <h2>Login / Register</h2>
+  <input type="text" id="username" placeholder="Username"/>
+  <input type="password" id="password" placeholder="Password"/>
+  <select id="role">
+    <option value="student">Student</option>
+    <option value="admin">Admin</option>
+  </select>
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+</div>
+
+<div class="container dashboard" id="dashboard">
+  <h2>Welcome, <span id="displayUsername"></span></h2>
+  <p><strong>Role:</strong> <span id="displayRole"></span></p>
+  <p><strong>Balance:</strong> $<span id="displayBalance">0.00</span></p>
+
+  <input type="number" id="amount" placeholder="Amount" />
+  <button onclick="makeTransaction('deposit')">Deposit</button>
+  <button onclick="makeTransaction('withdraw')">Withdraw</button>
+
+  <div class="transactions" id="transactionLog">
+    <strong>Transaction History:</strong>
+    <div id="transactionsList"></div>
+  </div>
+
+  <div class="admin-panel" id="adminPanel" style="display:none;">
+    <h4>Admin Panel</h4>
+    <input type="number" id="resetUserId" placeholder="User ID to Reset" />
+    <button onclick="resetUser()">Reset User Account</button>
+  </div>
+
+  <button onclick="logout()" style="margin-top:20px;">Logout</button>
+</div>
+
+<script>
+  let token = "";
+
+  function register() {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+    const role = document.getElementById("role").value;
+
+    fetch("http://localhost:3001/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) alert(data.error);
+      else alert("Registration successful!");
+    });
+  }
+
+  function login() {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    fetch("http://localhost:3001/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) return alert(data.error);
+      token = data.token;
+      showDashboard();
+    });
+  }
+
+  function showDashboard() {
+    fetch("http://localhost:3001/api/dashboard", {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("authContainer").style.display = "none";
+      document.getElementById("dashboard").style.display = "block";
+
+      const { user, transactions } = data;
+      document.getElementById("displayUsername").textContent = user.username;
+      document.getElementById("displayBalance").textContent = user.balance.toFixed(2);
+      document.getElementById("displayRole").textContent = user.role;
+      document.getElementById("adminPanel").style.display = user.role === "admin" ? "block" : "none";
+
+      const list = document.getElementById("transactionsList");
+      list.innerHTML = "";
+      transactions.forEach(tx => {
+        const line = document.createElement("div");
+        line.textContent = `${tx.date.split("T")[0]} - ${tx.type.toUpperCase()}: $${tx.amount.toFixed(2)}`;
+        list.appendChild(line);
+      });
+    });
+  }
+
+  function makeTransaction(type) {
+    const amount = parseFloat(document.getElementById("amount").value);
+    if (isNaN(amount) || amount <= 0) return alert("Enter a valid amount.");
+
+    fetch("http://localhost:3001/api/transaction", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ type, amount })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) alert(data.error);
+      else showDashboard();
+    });
+  }
+
+  function resetUser() {
+    const userId = document.getElementById("resetUserId").value;
+    if (!userId) return alert("Enter a user ID.");
+
+    fetch(`http://localhost:3001/api/reset/${userId}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    .then(res => res.json())
+    .then(data => alert(data.message || data.error));
+  }
+
+  function logout() {
+    token = "";
+    document.getElementById("dashboard").style.display = "none";
+    document.getElementById("authContainer").style.display = "block";
+  }
+</script>
+
+</body>
+</html>
